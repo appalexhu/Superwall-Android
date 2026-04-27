@@ -138,12 +138,17 @@ class RequestExecutor(
         // appalex fix: HttpURLConnection.connectTimeout defaults to 0 = INFINITE,
         // which causes ~95s blocks on Xiaomi/Hungarian networks when enrichment-api.superwall.com's
         // IPv6 endpoint is unreachable (Java HttpURLConnection prefers IPv6, no Happy Eyeballs).
-        // 5s connect matches RevenueCat's industry-standard SUPPORTED_FALLBACK_TIMEOUT_MS, lets the
-        // JDK fall through 3 dead IPv6 addresses to working IPv4 within 15s worst case (vs ~95s).
-        // readTimeout left at 0 (infinite) matches RevenueCat's deliberate choice — slow but legitimate
-        // responses on bad networks still complete. The SDK's eitherWithTimeout(1.seconds) wrapper
-        // is ineffective on blocking Java IO regardless, so this JDK-level timeout is what actually fires.
-        connection.connectTimeout = 5_000
+        //
+        // 1s connect lets the JDK fall through 3 dead IPv6 addresses to working IPv4 within ~3s
+        // (vs ~95s with the SDK default, ~15s with a 5s timeout). Cloudflare anycast IPv4 always
+        // resolves in <500ms globally so 1s is safe.
+        //
+        // readTimeout left at 0 (infinite) — matches RevenueCat's deliberate choice (per their
+        // HTTPClient.kt comment: "We leave the read timeout to the default, which means infinite").
+        // This prevents legitimate-but-slow responses on 3G/roaming networks from being dropped.
+        // The SDK's eitherWithTimeout(1.seconds) wrapper is ineffective on blocking Java IO via
+        // coroutine cancellation, so this JDK-level connectTimeout is what actually fires.
+        connection.connectTimeout = 1_000
         headers.forEach { header ->
             connection.setRequestProperty(header.key, header.value)
         }
