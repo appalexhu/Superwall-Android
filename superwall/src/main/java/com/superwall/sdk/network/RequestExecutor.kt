@@ -135,6 +135,13 @@ class RequestExecutor(
         }
 
         val connection = url.openConnection() as HttpURLConnection
+        // appalex fix: HttpURLConnection.connectTimeout/readTimeout default to 0 = INFINITE,
+        // which causes ~95s blocks on Xiaomi/Hungarian networks when enrichment-api.superwall.com's
+        // IPv6 endpoint is unreachable (Java HttpURLConnection prefers IPv6, no Happy Eyeballs).
+        // The SDK's eitherWithTimeout(1.seconds) cannot interrupt blocking Java IO via coroutine cancel.
+        // 1s matches the SDK's stated timeout intent in EnrichmentService and lets v4 fallback happen fast.
+        connection.connectTimeout = 1_000
+        connection.readTimeout = 1_000
         headers.forEach { header ->
             connection.setRequestProperty(header.key, header.value)
         }
